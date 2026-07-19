@@ -1,0 +1,26 @@
+databases:
+  - name: examguard-db
+    databaseName: examguard
+    user: examguard
+    # Free Render Postgres instances expire after 30 days — use "starter" (or
+    # higher) for anything you want to keep running past that.
+    plan: starter
+
+services:
+  - type: web
+    name: examguard-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    # Standard plan (2GB RAM) or higher is required: opencv-python + mediapipe +
+    # ultralytics (torch/torchvision) load a YOLOv8 model and a MediaPipe
+    # FaceLandmarker into memory at import time. Free/Starter (512MB) will OOM.
+    plan: standard
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: examguard-db
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
