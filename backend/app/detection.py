@@ -1,19 +1,34 @@
 import cv2
 import numpy as np
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 from ultralytics import YOLO
 import base64
+import urllib.request
+import os
 
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
+# Download face landmarker model if not present
+model_path = 'face_landmarker.task'
+if not os.path.exists(model_path):
+    print("Downloading face landmarker model...")
+    urllib.request.urlretrieve(
+        'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        model_path
+    )
+    print("Model downloaded.")
+
+base_options = python.BaseOptions(model_asset_path=model_path)
+options = vision.FaceLandmarkerOptions(
+    base_options=base_options,
+    num_faces=1,
+    min_face_detection_confidence=0.5,
+    min_face_presence_confidence=0.5,
     min_tracking_confidence=0.5
 )
+face_landmarker = vision.FaceLandmarker.create_from_options(options)
 
 yolo_model = YOLO('yolov8s.pt')
-
 
 FACE_3D_MODEL = np.array([
     [0.0, 0.0, 0.0],
@@ -41,15 +56,16 @@ def analyze_frame(base64_data):
     if frame is None:
         return events
 
-
     h, w = frame.shape[:2]
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(rgb_frame)
 
-    if not results.multi_face_landmarks:
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+    results = face_landmarker.detect(mp_image)
+
+    if not results.face_landmarks:
         events.append({'type': 'face_absent', 'confidence': 1.0})
     else:
-        landmarks = results.multi_face_landmarks[0].landmark
+        landmarks = results.face_landmarks[0]
 
         # --- Gaze / Head Pose ---
         face_2d = np.array([
@@ -100,7 +116,7 @@ def analyze_frame(base64_data):
             elif class_name == 'book' and confidence > 0.5:
                 events.append({'type': 'book_detected', 'confidence': round(confidence, 2)})
             elif class_name == 'person' and confidence > 0.7:
-                    person_count += 1
+                person_count += 1
 
     if person_count > 1:
         events.append({'type': 'multiple_persons', 'confidence': 1.0})
