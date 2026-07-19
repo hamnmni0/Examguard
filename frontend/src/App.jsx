@@ -6,11 +6,13 @@ import SessionReport from './pages/SessionReport.jsx'
 import LiveView from './pages/LiveView.jsx'
 import ProtectedRoute from './ProtectedRoute.jsx'
 import Signup from './pages/Signup.jsx'
+import Home from './pages/Home.jsx'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Home />} />
         <Route path="/monitor/:sessionId" element={<StudentMonitor />} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
