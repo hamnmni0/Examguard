@@ -20,8 +20,8 @@ function SessionReport() {
   async function fetchSessionDetails() {
     try {
       const response = await axios.get(
-        `${API_URL}/api/sessions/${sessionId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        API_URL + '/api/sessions/' + sessionId,
+        { headers: { Authorization: 'Bearer ' + token } }
       )
       setSession(response.data)
     } catch (error) {
@@ -32,25 +32,34 @@ function SessionReport() {
   }
 
   function getScoreBadge(score) {
-    if (score === null || score === undefined) return <Badge variant="secondary">Pending</Badge>
-    if (score >= 70) return <Badge variant="destructive">High Risk — {score}</Badge>
-    if (score >= 40) return <Badge className="bg-yellow-500 text-white">Medium Risk — {score}</Badge>
-    return <Badge className="bg-green-500 text-white">Low Risk — {score}</Badge>
+    if (score === null || score === undefined) {
+      return <Badge variant="secondary">Pending</Badge>
+    }
+    if (score >= 70) {
+      return <Badge variant="destructive">High Risk - {score}</Badge>
+    }
+    if (score >= 40) {
+      return <Badge className="bg-yellow-500 text-white">Medium Risk - {score}</Badge>
+    }
+    return <Badge className="bg-green-500 text-white">Low Risk - {score}</Badge>
   }
 
   function getEventColor(eventType) {
-    switch(eventType) {
-      case 'gaze_deviation': return 'text-yellow-600'
-      case 'phone_detected': return 'text-red-600'
-      case 'face_absent': return 'text-orange-600'
-      case 'lip_movement': return 'text-blue-600'
-      case 'multiple_persons': return 'text-red-800'
-      default: return 'text-gray-600'
-    }
+    if (eventType === 'gaze_deviation') return 'text-yellow-600'
+    if (eventType === 'phone_detected') return 'text-red-600'
+    if (eventType === 'face_absent') return 'text-orange-600'
+    if (eventType === 'lip_movement') return 'text-blue-600'
+    if (eventType === 'multiple_persons') return 'text-red-800'
+    return 'text-gray-600'
   }
 
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!session) return <div className="p-8">Session not found.</div>
+  if (loading) {
+    return <div className="p-8">Loading...</div>
+  }
+
+  if (!session) {
+    return <div className="p-8">Session not found.</div>
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -74,6 +83,7 @@ function SessionReport() {
         </div>
 
         <div className="grid gap-6">
+
           {session.students.length === 0 && (
             <p className="text-gray-500 text-center py-8">
               No students have joined this session yet.
@@ -87,10 +97,21 @@ function SessionReport() {
                   <CardTitle className="text-lg">{student.student_identifier}</CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
                     Joined: {new Date(student.joined_at).toLocaleString()}
-                    {student.ended_at && ` · Ended: ${new Date(student.ended_at).toLocaleString()}`}
+                    {student.ended_at ? ' - Ended: ' + new Date(student.ended_at).toLocaleString() : ''}
                   </p>
                 </div>
-                {getScoreBadge(student.suspicion_score)}
+                <div className="flex items-center gap-3">
+                  {student.has_recording && (
+                    <a
+                      href={API_URL + '/api/sessions/' + session.id + '/recording/' + student.id + '/download?token=' + token}
+                      className="bg-blue-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-blue-700"
+                      download
+                    >
+                      Download Recording
+                    </a>
+                  )}
+                  {getScoreBadge(student.suspicion_score)}
+                </div>
               </CardHeader>
 
               <CardContent>
@@ -105,7 +126,7 @@ function SessionReport() {
                 <div className="space-y-2">
                   {student.flagged_events && student.flagged_events.slice(0, 50).map((event, index) => (
                     <div key={index} className="flex items-center justify-between border-b pb-2">
-                      <span className={`text-sm font-medium ${getEventColor(event.event_type)}`}>
+                      <span className={'text-sm font-medium ' + getEventColor(event.event_type)}>
                         {event.event_type.replace(/_/g, ' ').toUpperCase()}
                       </span>
                       <div className="flex gap-4 text-sm text-gray-500">
@@ -124,6 +145,7 @@ function SessionReport() {
               </CardContent>
             </Card>
           ))}
+
         </div>
       </div>
     </div>

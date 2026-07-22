@@ -9,6 +9,7 @@ function StudentMonitor() {
   const videoRef = useRef(null)
   const socketRef = useRef(null)
   const intervalRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
   const [cameraStatus, setCameraStatus] = useState('idle')
   const [studentId, setStudentId] = useState('')
   const [sessionDbId, setSessionDbId] = useState(null)
@@ -25,12 +26,13 @@ function StudentMonitor() {
       videoRef.current.srcObject = stream
       setCameraStatus('active')
       startStreaming(response.data.student_session_id)
+      startRecording(stream, response.data.student_session_id)
     } catch (error) {
       setCameraStatus('denied')
     }
   }
 
- function startStreaming(studentSessionId) {
+  function startStreaming(studentSessionId) {
     socketRef.current = io(API_URL)
 
     socketRef.current.on('connect', () => {
@@ -46,7 +48,6 @@ function StudentMonitor() {
       console.log('Flagged event:', data)
     })
 
-    // AI detection frames every 2 seconds
     intervalRef.current = setInterval(() => {
       if (!videoRef.current) return
       const canvas = document.createElement('canvas')
@@ -61,7 +62,6 @@ function StudentMonitor() {
       })
     }, 2000)
 
-    // Thumbnail updates every 500ms for smoother live view
     const thumbnailInterval = setInterval(() => {
       if (!videoRef.current || !socketRef.current) return
       const canvas = document.createElement('canvas')
@@ -78,8 +78,52 @@ function StudentMonitor() {
 
     socketRef.thumbnailInterval = thumbnailInterval
   }
+
+  function startRecording(stream, studentSessionId) {
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+    mediaRecorderRef.current = mediaRecorder
+
+    mediaRecorder.ondataavailable = async (e) => {
+      if (e.data && e.data.size > 0) {
+        try {
+          await fetch(API_URL + '/api/sessions/' + sessionId + '/recording/' + studentSessionId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: e.data
+          })
+        } catch (err) {
+          console.error('Failed to save recording chunk:', err)
+        }
+      }
+    }
+
+    mediaRecorder.start(10000)
+  }
+  
+  function leaveSession() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    if (socketRef.current) {
+      socketRef.current.emit('leave_session', {
+        session_id: parseInt(sessionId),
+        student_session_id: sessionDbId
+      })
+      socketRef.current.disconnect()
+    }
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (socketRef.thumbnailInterval) clearInterval(socketRef.thumbnailInterval)
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+    }
+    setCameraStatus('left')
+  }
+
   useEffect(() => {
     return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (socketRef.thumbnailInterval) clearInterval(socketRef.thumbnailInterval)
       if (socketRef.current) socketRef.current.disconnect()
@@ -99,7 +143,6 @@ function StudentMonitor() {
               <h1 className="text-2xl font-bold text-gray-900">ExamGuard</h1>
               <p className="text-gray-500 mt-1">Exam Monitoring System</p>
             </div>
-
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <h2 className="font-semibold text-blue-900 mb-2">Before you begin</h2>
               <ul className="text-sm text-blue-800 space-y-1">
@@ -109,7 +152,6 @@ function StudentMonitor() {
                 <li>• Do not leave the camera frame during the exam</li>
               </ul>
             </div>
-
             <input
               type="text"
               placeholder="Enter your Student ID or Full Name"
@@ -117,7 +159,6 @@ function StudentMonitor() {
               onChange={(e) => setStudentId(e.target.value)}
               className="w-full border rounded-lg px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-
             <button
               onClick={startCamera}
               disabled={!studentId.trim()}
@@ -144,6 +185,14 @@ function StudentMonitor() {
           </div>
         )}
 
+        {cameraStatus === 'left' && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="text-4xl mb-4">✅</div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Session Ended</h2>
+            <p className="text-gray-500">You have successfully left the monitoring session. You may close this tab.</p>
+          </div>
+        )}
+
         <div
           style={{ display: cameraStatus === 'active' ? 'block' : 'none' }}
           className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
@@ -161,10 +210,16 @@ function StudentMonitor() {
             playsInline
             className="w-full"
           />
-          <div className="bg-gray-700 px-4 py-3">
-            <p className="text-gray-400 text-xs text-center">
+          <div className="bg-gray-700 px-4 py-3 flex items-center justify-between">
+            <p className="text-gray-400 text-xs">
               Your session is being monitored. Do not leave the camera frame.
             </p>
+            <button
+              onClick={leaveSession}
+              className="bg-red-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-red-700"
+            >
+              Leave Session
+            </button>
           </div>
         </div>
 
